@@ -77,7 +77,7 @@
 - 支持从立项到长篇治理的完整链路
 - 内置章节质量门、返修分级和最小输出模板
 - 默认落盘到项目目录，保留章节过程文件和正文文件
-- 内置统一 CLI：立项落盘、章节起停、审阅、治理都能走命令闭环
+- 内置统一 CLI：立项落盘、章节起停、轻量规则审阅、治理都能走命令闭环
 - 避免把设定写成百科，把正文写成模板
 
 ## 使用方式
@@ -123,6 +123,11 @@ python3 scripts/novel_pipeline.py finish-chapter ./novels/项目名 --chapter-nu
 python3 scripts/novel_pipeline.py review ./novels/项目名/manuscript/第0001章-标题.md --project-path ./novels/项目名
 python3 scripts/novel_pipeline.py governance ./novels/项目名 --current-volume "第一卷" --current-phase "阶段1" --phase-promise "阶段承诺" --phase-main-problem "阶段主问题" --phase-climax "阶段高潮" --phase-payoff "阶段回报" --new-risk "新增风险"
 ```
+
+补充说明：
+
+- `finish-chapter` 现在会校验意图卡和非空正文；如果还只是壳子，不会回写 `task_log.md` 或章节状态。
+- `review` 当前定位是轻量规则预检，只检查模板残留、成串 AI 套语、结尾总结腔和“像壳子”的短章。爽点 / 毒点 / POV / 世界规则 / 逻辑硬伤仍按 `SKILL.md` 与 `references/revision-and-review.md` 的完整工作流由模型或人工深审。
 
 `scripts/project_scaffold.py` 仍保留 `init / prepare-chapter` 兼容入口，方便旧调用继续工作。
 
