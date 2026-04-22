@@ -75,8 +75,8 @@ Ask：
 - 需要初始化目录时，优先运行 `python3 scripts/novel_pipeline.py init "<项目名>" --target-dir <父目录>`；兼容旧入口时可用 `python3 scripts/project_scaffold.py init "<项目名>" --target-dir <父目录>`。
 - 立项 / 世界观 / 人设 / 章节规划落盘时，优先运行 `python3 scripts/novel_pipeline.py bootstrap <项目目录> --payload-file <json文件>`，把 canonical 文档写进 `docs/`、`characters/`。
 - 章节任务写前，优先运行 `python3 scripts/novel_pipeline.py next-chapter <项目目录> --chapter-title "标题"`；兼容旧入口时可用 `python3 scripts/project_scaffold.py prepare-chapter <项目目录> --chapter-num <章节号> --chapter-title "标题"`。`next-chapter` 默认同时生成意图卡、场景卡、追踪文件、context、rule-stack 和正文壳子。
-- 正文完成后，运行 `python3 scripts/novel_pipeline.py finish-chapter <项目目录> --chapter-num <章节号> --chapter-title "标题" --summary "本章摘要"`，把摘要、章节规划、伏笔、时间线、task_log 回写闭环。
-- 审阅与治理分别走 `python3 scripts/novel_pipeline.py review ...` 和 `python3 scripts/novel_pipeline.py governance ...`。
+- 正文完成后，运行 `python3 scripts/novel_pipeline.py finish-chapter <项目目录> --chapter-num <章节号> --chapter-title "标题" --summary "本章摘要"`，把摘要、章节规划、伏笔、时间线、task_log 回写闭环。`finish-chapter` 只接受“意图卡已存在 + 正文非空”的章节，空壳不会被标成已完成。
+- 审阅与治理分别走 `python3 scripts/novel_pipeline.py review ...` 和 `python3 scripts/novel_pipeline.py governance ...`。其中 `review` 目前只做轻量规则预检，不替代完整审稿。
 
 按需加载：
 - `references/project-bootstrapping.md`
@@ -90,7 +90,7 @@ Ask：
 匹配一个主工作流，不要几条同时乱跑：
 - 立项 / 世界观 / 人物 / 大纲：加载 `references/project-bootstrapping.md` 和 `references/output-templates.md`
 - 章节续写 / 场景卡 / 细纲：加载 `references/chapter-execution.md` 和 `references/quality-gates.md`
-- 评审 / 改稿 / 去 AI 味：加载 `references/revision-and-review.md` 和 `references/quality-gates.md`
+- 评审 / 改稿 / 去 AI 味：加载 `references/revision-and-review.md` 和 `references/quality-gates.md`。如果只是跑 CLI `review`，把它当模板残留 / 套语 / 结尾总结腔 / 短章壳子的预检，不要当完整审稿结论。
 - 长篇治理 / 分卷 / 结构变更：加载 `references/longform-governance.md` 和 `references/output-templates.md`
 - 营销包装：加载 `references/output-templates.md` 和 `references/quality-gates.md`
 
@@ -108,7 +108,7 @@ Ask：
 - 大纲：用“终点站 -> 起爆事件 -> 连锁反应 -> 分卷锚点”推进
 - 章节：先定 POV、信息边界、场景推进链，再写正文
 - 返修：先判轻修 / 中修 / 重修，优先定向修，不默认整章推翻
-- 评审：先给 P0 / P1 / P2 问题，再给证据和修法
+- 评审：完整审稿先给 P0 / P1 / P2 问题，再给证据和修法；如果只是调用 CLI `review`，默认只产出轻量规则报告
 - 治理：输出当前阶段、未兑现承诺、风险点、下一阶段动作
 
 默认文件映射：

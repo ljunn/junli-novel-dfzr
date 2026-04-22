@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -91,6 +92,14 @@ def get_key_value(text: str, key: str, default: str = "未记录") -> str:
     return value or default
 
 
+def get_int_key_value(text: str, key: str, default: int = 0) -> int:
+    value = get_key_value(text, key, "")
+    match = re.search(r"-?\d+", value)
+    if not match:
+        return default
+    return int(match.group(0))
+
+
 def replace_section(text: str, heading: str, lines: list[str]) -> str:
     section_body = "\n".join(lines).rstrip() + "\n"
     pattern = rf"(?ms)(^## {re.escape(heading)}\n)(.*?)(?=^## |\Z)"
@@ -119,6 +128,25 @@ def parse_markdown_table_rows(text: str, heading: str) -> tuple[str, list[str]] 
     prefix = match.group(1)
     rows = [line for line in match.group(2).splitlines() if line.strip()]
     return prefix, rows
+
+
+def get_subsection_lines(text: str, heading: str) -> list[str]:
+    pattern = rf"(?ms)^### {re.escape(heading)}\n(.*?)(?=^### |\n## |\Z)"
+    match = re.search(pattern, text)
+    if not match:
+        return []
+    return [line.strip() for line in match.group(1).splitlines() if line.strip()]
+
+
+def markdown_cell(value: Any) -> str:
+    text = str(value or "")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = text.replace("|", r"\|")
+    return text.replace("\n", "<br>")
+
+
+def markdown_row(cells: list[Any]) -> str:
+    return "| " + " | ".join(markdown_cell(cell) for cell in cells) + " |"
 
 
 def render_task_log(project_name: str) -> str:
@@ -439,18 +467,16 @@ def render_chapter_plan(rows: list[dict[str, Any]]) -> str:
     ]
     for row in rows:
         lines.append(
-            "| "
-            + " | ".join(
+            markdown_row(
                 [
                     chapter_label(int(row.get("chapter", 0))) if row.get("chapter") else "",
-                    str(row.get("title", "")),
-                    str(row.get("goal", "")),
-                    str(row.get("conflict", "")),
-                    str(row.get("payoff", "")),
-                    str(row.get("pressure", "")),
+                    row.get("title", ""),
+                    row.get("goal", ""),
+                    row.get("conflict", ""),
+                    row.get("payoff", ""),
+                    row.get("pressure", ""),
                 ]
             )
-            + " |"
         )
     lines.extend(
         [
@@ -564,6 +590,50 @@ def compute_manuscript_stats(project_dir: Path) -> tuple[int, int]:
     return len(chapter_files), total_words
 
 
+def collect_completed_chapter_nums(project_dir: Path) -> list[int]:
+    chapter_plan = read_text(project_dir / "docs" / "章节规划.md")
+    completed = set()
+    for line in get_subsection_lines(chapter_plan, "已完成"):
+        if line == "- 暂无":
+            continue
+        chapter_num = parse_chapter_number_from_name(line)
+        if chapter_num is not None:
+            completed.add(chapter_num)
+    return sorted(completed)
+
+
+def get_completed_stats(project_dir: Path, extra_completed: dict[int, Path] | None = None) -> tuple[int, int]:
+    task_log = read_text(project_dir / "task_log.md")
+    task_log_count = get_int_key_value(task_log, "累计完成章节：", 0)
+    task_log_words = get_int_key_value(task_log, "累计完成字数：", 0)
+
+    completed_nums = set(collect_completed_chapter_nums(project_dir))
+    chapter_map: dict[int, Path] = {}
+    for path in get_chapter_files(project_dir):
+        chapter_num = parse_chapter_number_from_name(path.name)
+        if chapter_num is not None:
+            chapter_map[chapter_num] = path
+
+    if extra_completed:
+        completed_nums.update(extra_completed)
+        chapter_map.update(extra_completed)
+
+    if not completed_nums:
+        return task_log_count, task_log_words
+
+    total_words = 0
+    for chapter_num in sorted(completed_nums):
+        chapter_path = chapter_map.get(chapter_num)
+        if chapter_path is None:
+            continue
+        total_words += count_story_units(extract_story_body(read_text(chapter_path)))
+
+    computed_count = len(completed_nums)
+    if task_log_count > computed_count:
+        return task_log_count, task_log_words
+    return computed_count, total_words
+
+
 def latest_chapter_num(project_dir: Path) -> int:
     nums = [parse_chapter_number_from_name(path.name) for path in get_chapter_files(project_dir)]
     clean = [num for num in nums if num is not None]
@@ -589,7 +659,7 @@ def read_project_state(project_dir: Path) -> dict[str, Any]:
     task_log = read_text(project_dir / "task_log.md")
     focus = read_text(project_dir / "docs" / "当前焦点.md")
     outline = read_text(project_dir / "docs" / "项目总纲.md")
-    chapter_count, total_words = compute_manuscript_stats(project_dir)
+    chapter_count, total_words = get_completed_stats(project_dir)
     return {
         "project_dir": str(project_dir),
         "project_name": get_key_value(task_log, "书名：", project_dir.name),
@@ -751,11 +821,11 @@ def render_rule_stack_yaml(state: dict[str, Any], chapter_num: int, chapter_titl
     pov = args.pov or state.get("viewpoint") or "未记录"
     lines = [
         f"chapter: {chapter_num}",
-        f"title: {chapter_title}",
+        f"title: {json.dumps(chapter_title, ensure_ascii=False)}",
         "dao:",
-        f"  promise: {goal}",
+        f"  promise: {json.dumps(goal, ensure_ascii=False)}",
         "fa:",
-        f"  pov: {pov}",
+        f"  pov: {json.dumps(pov, ensure_ascii=False)}",
         "  chapter_guardrails:",
         "    - 前 20% 必须有钩子",
         "    - 本章至少给一次回报",
@@ -1098,7 +1168,7 @@ def parse_foreshadow_row(raw: str) -> list[str]:
 
 def append_table_row(path: Path, row: list[str]) -> None:
     content = read_text(path)
-    table_row = "| " + " | ".join(row) + " |"
+    table_row = markdown_row(row)
     if table_row in content:
         return
     write_text(path, content.rstrip() + "\n" + table_row + "\n")
@@ -1120,7 +1190,7 @@ def update_chapter_plan_for_finish(
     text = read_text(path)
     parsed = parse_markdown_table_rows(text, "章节规划")
     target_label = chapter_label(chapter_num)
-    new_row = "| " + " | ".join([target_label, chapter_title, goal, conflict, payoff, end_pressure]) + " |"
+    new_row = markdown_row([target_label, chapter_title, goal, conflict, payoff, end_pressure])
 
     if parsed:
         prefix, rows = parsed
@@ -1142,8 +1212,20 @@ def update_chapter_plan_for_finish(
 
     text = re.sub(r"(?m)^- 已完成章节数：.*$", f"- 已完成章节数：{chapter_count} 章", text)
     text = re.sub(r"(?m)^- 累计字数：.*$", f"- 累计字数：{total_words} 字", text)
-    text = replace_subsection(text, "进行中", ["- 暂无"])
-    text = replace_subsection(text, "已完成", [f"- [x] {target_label}：{chapter_title}"])
+    in_progress = [
+        line
+        for line in get_subsection_lines(text, "进行中")
+        if line != "- 暂无" and target_label not in line
+    ]
+    completed = [
+        line
+        for line in get_subsection_lines(text, "已完成")
+        if line != "- 暂无" and target_label not in line
+    ]
+    completed.append(f"- [x] {target_label}：{chapter_title}")
+    completed.sort(key=lambda line: parse_chapter_number_from_name(line) or 0)
+    text = replace_subsection(text, "进行中", in_progress or ["- 暂无"])
+    text = replace_subsection(text, "已完成", completed or ["- 暂无"])
     summary_line = f"### {target_label}：{chapter_title}\n**摘要**：{summary}"
     summary_pattern = rf"(?ms)^### {re.escape(target_label)}：.*?(?=^### 第\d+章|^## |\Z)"
     if re.search(summary_pattern, text):
@@ -1190,15 +1272,37 @@ def handle_finish_chapter(args: argparse.Namespace) -> int:
     else:
         manuscript = paths["manuscript"]
 
+    missing_inputs: list[str] = []
+    if not paths["intent"].exists():
+        missing_inputs.append(f"缺少意图卡：{paths['intent']}")
+    if not manuscript.exists():
+        missing_inputs.append(f"缺少正文文件：{manuscript}")
+    if missing_inputs:
+        print("finish-chapter 失败：", file=sys.stderr)
+        for item in missing_inputs:
+            print(f"- {item}", file=sys.stderr)
+        return 1
+
     intent_fields = parse_intent_card(paths["intent"])
     body = extract_story_body(read_text(manuscript))
-    word_count = count_story_units(body)
-    chapter_count, total_words = compute_manuscript_stats(project_dir)
-    total_words = max(total_words, word_count)
-    chapter_count = max(chapter_count, chapter_num)
+    if not body.strip():
+        print(
+            f"finish-chapter 失败：正文为空，先完成 {manuscript.name} 再回写项目状态。",
+            file=sys.stderr,
+        )
+        return 1
 
+    word_count = count_story_units(body)
     task_log_path = project_dir / "task_log.md"
     task_log = read_text(task_log_path, render_task_log(project_dir.name))
+    completed_nums = set(collect_completed_chapter_nums(project_dir))
+    chapter_count, total_words = get_completed_stats(project_dir, {chapter_num: manuscript})
+    existing_count = get_int_key_value(task_log, "累计完成章节：", 0)
+    existing_words = get_int_key_value(task_log, "累计完成字数：", 0)
+    if existing_count > len(completed_nums):
+        chapter_count = existing_count if chapter_num in completed_nums else existing_count + 1
+        total_words = existing_words if chapter_num in completed_nums else existing_words + word_count
+
     task_log = upsert_key_value(task_log, "创作阶段：", "章节已完成")
     task_log = upsert_key_value(task_log, "最新章节：", chapter_label_text)
     task_log = upsert_key_value(task_log, "当前处理章节：", "无")
@@ -1341,7 +1445,7 @@ def handle_review(args: argparse.Namespace) -> int:
 def append_change_log(path: Path, scope: str, reason: str, impact: str) -> None:
     content = read_text(path)
     today = datetime.now().strftime("%Y-%m-%d")
-    row = f"| {today} | {scope} | {reason} | {impact} |"
+    row = markdown_row([today, scope, reason, impact])
     if row in content:
         return
     write_text(path, content.rstrip() + "\n" + row + "\n")
