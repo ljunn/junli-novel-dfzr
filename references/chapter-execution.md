@@ -14,6 +14,21 @@
 
 如果缺关键文件，要明确报告阻塞，不要假装已经恢复上下文。
 
+如果项目走 CLI，建议顺序：
+
+```bash
+python3 scripts/novel_pipeline.py resume <项目目录>
+python3 scripts/novel_pipeline.py next-chapter <项目目录> --chapter-title "标题"
+```
+
+`next-chapter` 会默认生成：
+- `runtime/chapter-XXXX.intent.md`
+- `runtime/chapter-XXXX.scenes.md`
+- `runtime/chapter-XXXX.trace.md`
+- `runtime/chapter-XXXX.context.json`
+- `runtime/chapter-XXXX.rule-stack.yaml`
+- `manuscript/第XXXX章-标题.md`
+
 ## 二、先产出章节意图卡
 
 正文前至少锁定：
@@ -63,5 +78,19 @@
 - 去掉本章后，主线、人物或关系是否明显受损
 - 本章有没有逼出选择、代价或误判，而不是只发生一件事
 - 章末是否仍有前台未决压力，能拉动下一章
+
+正文完成后，如果走 CLI，记得执行：
+
+```bash
+python3 scripts/novel_pipeline.py finish-chapter <项目目录> --chapter-num <章节号> --chapter-title "标题" --summary "本章摘要"
+```
+
+它会回写：
+- `task_log.md`
+- `docs/当前焦点.md`
+- `docs/章节规划.md`
+- `plot/伏笔记录.md`（传入 `--foreshadow` 时）
+- `plot/时间线.md`（传入 `--timeline-event` 时）
+- `runtime/chapter-XXXX.trace.md`
 
 详细质量门见 `references/quality-gates.md`。

@@ -27,6 +27,7 @@ Junli Novel DFZR Progress:
   - [ ] 2.1 新项目：补齐 5 个阻塞信息
   - [ ] 2.2 旧项目：按顺序恢复记忆
   - [ ] 2.3 明确这轮允许修改的范围
+  - [ ] 2.4 锁定项目目录、文件落点与过程文件
 - [ ] Step 3: 选择工作流并加载 reference ⚠️ REQUIRED
 - [ ] Step 4: 生成目标产物
 - [ ] Step 5: 过质量门并交付
@@ -67,11 +68,22 @@ Ask：
 
 如果用户只让你修局部，不要擅自放大成全章重写或世界观重构。
 
+默认落盘规则：
+- 默认把产物写入项目目录，不只在聊天里交付一版文本。
+- 只有用户明确要求“先别写文件”“只给聊天稿”“我先看草案”时，才暂时不落盘。
+- 新项目先锁定项目名和项目目录；用户没给路径时，默认在当前工作目录下创建 `novels/<项目名>/`。如果连项目名都没有，先问项目名。
+- 需要初始化目录时，优先运行 `python3 scripts/novel_pipeline.py init "<项目名>" --target-dir <父目录>`；兼容旧入口时可用 `python3 scripts/project_scaffold.py init "<项目名>" --target-dir <父目录>`。
+- 立项 / 世界观 / 人设 / 章节规划落盘时，优先运行 `python3 scripts/novel_pipeline.py bootstrap <项目目录> --payload-file <json文件>`，把 canonical 文档写进 `docs/`、`characters/`。
+- 章节任务写前，优先运行 `python3 scripts/novel_pipeline.py next-chapter <项目目录> --chapter-title "标题"`；兼容旧入口时可用 `python3 scripts/project_scaffold.py prepare-chapter <项目目录> --chapter-num <章节号> --chapter-title "标题"`。`next-chapter` 默认同时生成意图卡、场景卡、追踪文件、context、rule-stack 和正文壳子。
+- 正文完成后，运行 `python3 scripts/novel_pipeline.py finish-chapter <项目目录> --chapter-num <章节号> --chapter-title "标题" --summary "本章摘要"`，把摘要、章节规划、伏笔、时间线、task_log 回写闭环。
+- 审阅与治理分别走 `python3 scripts/novel_pipeline.py review ...` 和 `python3 scripts/novel_pipeline.py governance ...`。
+
 按需加载：
 - `references/project-bootstrapping.md`
 - `references/chapter-execution.md`
 - `references/revision-and-review.md`
 - `references/longform-governance.md`
+- `references/project-file-layout.md`
 
 ## Step 3: 选择工作流并加载 reference ⚠️ REQUIRED
 
@@ -81,6 +93,8 @@ Ask：
 - 评审 / 改稿 / 去 AI 味：加载 `references/revision-and-review.md` 和 `references/quality-gates.md`
 - 长篇治理 / 分卷 / 结构变更：加载 `references/longform-governance.md` 和 `references/output-templates.md`
 - 营销包装：加载 `references/output-templates.md` 和 `references/quality-gates.md`
+
+只要这轮产物要长期保存、后续续写、跨轮复用或多人协同，额外加载 `references/project-file-layout.md`。
 
 确认门：
 - 如果要写 3000 字以上正文、重写用户已有章节、或改变全书级设定，先给 5-10 行执行方案或变更摘要。
@@ -97,6 +111,21 @@ Ask：
 - 评审：先给 P0 / P1 / P2 问题，再给证据和修法
 - 治理：输出当前阶段、未兑现承诺、风险点、下一阶段动作
 
+默认文件映射：
+- 故事圣经 / 主线梗概 / 立项摘要 -> `docs/项目总纲.md`
+- 世界观 / 设定铁律 -> `docs/世界观.md`、`docs/法则.md`
+- 人物卡 -> `characters/<角色名>.md`
+- 章节规划 / 分卷规划 -> `docs/章节规划.md`、`docs/卷纲.md`
+- 治理 / 结构变更 -> `docs/阶段规划.md`、`docs/变更日志.md`
+- 章节意图 / 场景拆分 -> `runtime/chapter-XXXX.intent.md`、`runtime/chapter-XXXX.scenes.md`
+- 过程记录 -> `runtime/chapter-XXXX.trace.md`
+- 运行时上下文 -> `runtime/chapter-XXXX.context.json`、`runtime/chapter-XXXX.rule-stack.yaml`
+- 正文 -> `manuscript/第XXXX章-标题.md`
+- 评审 / 返修报告 -> `审阅意见/`
+- 营销包装 -> `marketing/`
+
+先写文件，再在聊天里给摘要和路径。除非用户明确要求只看聊天稿，不要把大纲、世界观、过程文件、正文混在一条纯聊天回复里就算完成。
+
 ## Step 5: 过质量门并交付
 
 交付前加载 `references/quality-gates.md`。
@@ -109,6 +138,9 @@ Ask：
 - 如果是章节：前 20% 有钩子，中段有回报，章末有未决压力
 - 如果是设定或大纲：能看出冲突来源、推进链和代价系统
 - 如果是返修：没有越权改动无关部分
+- 该落盘的产物已经写入正确目录
+- 正文与过程文件已经分离
+- 如果走 CLI，`task_log.md`、`docs/当前焦点.md`、`docs/章节规划.md` 已完成同步
 
 ## Anti-Patterns
 
@@ -118,6 +150,9 @@ Ask：
 - 把“器”做成一堆无用产物，不管用户这次真正需要什么
 - 以整章重写逃避局部修复
 - 为了去 AI 味把信息、爽点、钩子一起洗掉
+- 只在聊天里给大纲、世界观、正文，不同步项目文件
+- 把正文、意图卡、场景卡和追踪记录塞进同一个文件
+- 只写结果，不留后续续写可复用的过程文件
 
 ## Pre-Delivery Checklist
 
@@ -127,3 +162,5 @@ Ask：
 - [ ] 没有把设定写成与冲突脱节的清单
 - [ ] 没有把章节结尾写成感悟或总结
 - [ ] 没有把局部返修扩大成整章推翻
+- [ ] 该落盘的内容已写入约定目录
+- [ ] 章节任务已同步过程文件和正文文件
